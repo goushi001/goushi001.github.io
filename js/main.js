@@ -54,8 +54,8 @@ const VIDEOS = [
 ];
 
 const MATERIALS = [
-    { icon: "📊", title: "ETF 份额统计", desc: "最新的 ETF 份额统计数据，包含各基金份额变化情况。", tags: ["ETF", "数据", "Excel"], date: "2026-06-05", link: "assets/posts/ETF份额统计.xlsx" },
-    // 示例： { icon: "📄", title: "标题", desc: "描述", tags: ["标签1"], date: "2026-06-08", link: "文件路径" }
+    { icon: "📊", title: "ETF 份额统计", desc: "最新的 ETF 份额统计数据，包含各基金份额变化情况。", tags: ["ETF", "数据", "Excel"], date: "2026-06-05", file: "assets/posts/ETF份额统计.xlsx", fileName: "ETF份额统计.xlsx" },
+    // 示例： { icon: "📄", title: "标题", desc: "描述", tags: ["标签1"], date: "2026-06-08", file: "文件路径", fileName: "文档名.xlsx" }
 ];
 
 /* ===== 渲染函数 ===== */
@@ -153,7 +153,11 @@ function renderMaterials() {
     }
 
     container.innerHTML = MATERIALS.map(m => {
-        const inner = `
+        const hasFile = m.file && m.fileName;
+        const previewUrl = hasFile ? `preview.html?file=${encodeURIComponent(m.file)}&name=${encodeURIComponent(m.fileName)}` : '';
+        const downloadUrl = hasFile ? m.file : '';
+
+        let inner = `
             <div class="material-icon">${m.icon || '📄'}</div>
             <div class="material-content">
                 <h3>${m.title}</h3>
@@ -163,10 +167,19 @@ function renderMaterials() {
                     ${(m.tags || []).map(t => `<span class="material-tag">${t}</span>`).join('')}
                 </div>
             </div>
-            <div class="material-download">⬇️</div>
         `;
-        if (m.link) {
-            return `<a class="material-item" href="${m.link}" download="${m.title}.xlsx">${inner}</a>`;
+
+        if (hasFile) {
+            inner += `
+                <div class="material-actions">
+                    <a href="${previewUrl}" class="mat-action mat-preview">👁️ 预览</a>
+                    <a href="${downloadUrl}" class="mat-action mat-dl" download onclick="event.stopPropagation()">⬇️</a>
+                </div>
+            `;
+        }
+
+        if (previewUrl) {
+            return `<a class="material-item" href="${previewUrl}">${inner}</a>`;
         }
         return `<div class="material-item">${inner}</div>`;
     }).join("");

@@ -404,16 +404,53 @@ video { max-width: 100%; height: auto; display: block; }
     border-color: var(--accent);
 }
 
-.material-download {
-    font-size: 1.2rem;
+.material-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
     flex-shrink: 0;
     align-self: center;
-    opacity: 0.5;
-    transition: opacity 0.2s;
 }
 
-.material-item:hover .material-download {
-    opacity: 1;
+.mat-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-decoration: none !important;
+    transition: all 0.2s;
+}
+
+.mat-preview {
+    background: var(--accent-light);
+    color: var(--accent) !important;
+}
+.mat-preview:hover {
+    background: var(--accent);
+    color: #fff !important;
+}
+
+.mat-dl {
+    background: var(--bg-alt);
+    color: var(--text-secondary) !important;
+}
+.mat-dl:hover {
+    background: var(--border);
+    color: var(--text) !important;
+}
+
+/* 如果 material-item 是链接（点击进预览） */
+a.material-item {
+    cursor: pointer;
+}
+a.material-item .mat-action {
+    pointer-events: auto;
+}
+a.material-item .mat-dl {
+    pointer-events: auto;
 }
 
 .material-icon {
