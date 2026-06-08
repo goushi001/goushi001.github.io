@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>图库 - 阿奇的资料站</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header class="header">
+        <div class="container">
+            <nav class="navbar">
+                <a href="/" class="logo">🍎 阿奇的资料站</a>
+                <ul class="nav-links">
+                    <li><a href="index.html">首页</a></li>
+                    <li><a href="materials.html">资料</a></li>
+                    <li><a href="gallery.html" class="active">图库</a></li>
+                    <li><a href="videos.html">视频</a></li>
+                </ul>
+                <button class="menu-toggle" aria-label="菜单">☰</button>
+            </nav>
+        </div>
+    </header>
+
+    <section class="page-header">
+        <div class="container">
+            <h1>🖼️ 图库</h1>
+            <p>摄影、设计、图片收藏</p>
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="container">
+            <div class="gallery-grid" id="gallery-grid">
+                <!-- JS 动态加载 -->
+            </div>
+        </div>
+    </section>
+
+    <!-- Lightbox 由 JS 创建 -->
+
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2026 阿奇的资料站 · Made with 🍎</p>
+        </div>
+    </footer>
+
+    <script src="js/main.js"></script>
+</body>
+</html>

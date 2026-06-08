@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>阿奇的资料站</title>
+    <meta name="description" content="个人资料、图片、视频展示博客">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <!-- 导航栏 -->
+    <header class="header">
+        <div class="container">
+            <nav class="navbar">
+                <a href="/" class="logo">🍎 阿奇的资料站</a>
+                <ul class="nav-links">
+                    <li><a href="/" class="active">首页</a></li>
+                    <li><a href="materials.html">资料</a></li>
+                    <li><a href="gallery.html">图库</a></li>
+                    <li><a href="videos.html">视频</a></li>
+                </ul>
+                <button class="menu-toggle" aria-label="菜单">☰</button>
+            </nav>
+        </div>
+    </header>
+
+    <!-- 英雄区 -->
+    <section class="hero">
+        <div class="container">
+            <div class="hero-content">
+                <h1>欢迎来到我的资料站</h1>
+                <p>整理资料、分享图片、记录视频的地方。</p>
+                <div class="hero-buttons">
+                    <a href="materials.html" class="btn btn-primary">浏览资料</a>
+                    <a href="gallery.html" class="btn btn-secondary">看看图库</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 最近更新 -->
+    <section class="section">
+        <div class="container">
+            <h2 class="section-title">✨ 最近更新</h2>
+            <div class="posts-grid" id="recent-posts">
+                <!-- JS 动态加载 -->
+            </div>
+        </div>
+    </section>
+
+    <!-- 分类入口 -->
+    <section class="section section-alt">
+        <div class="container">
+            <h2 class="section-title">📂 分类浏览</h2>
+            <div class="categories">
+                <a href="materials.html" class="category-card">
+                    <div class="category-icon">📄</div>
+                    <h3>资料</h3>
+                    <p>文档、笔记、干货整理</p>
+                </a>
+                <a href="gallery.html" class="category-card">
+                    <div class="category-icon">🖼️</div>
+                    <h3>图库</h3>
+                    <p>摄影、设计、图片收藏</p>
+                </a>
+                <a href="videos.html" class="category-card">
+                    <div class="category-icon">🎬</div>
+                    <h3>视频</h3>
+                    <p>短片、Vlog、精彩片段</p>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- 底部 -->
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2026 阿奇的资料站 · Made with 🍎</p>
+        </div>
+    </footer>
+
+    <script src="js/main.js"></script>
+</body>
+</html>
