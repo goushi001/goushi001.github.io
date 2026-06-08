@@ -4,6 +4,16 @@
 const POSTS = [
     {
         id: 1,
+        title: "ETF 份额统计数据",
+        summary: "最新的 ETF 份额统计表格，可直接下载查看。",
+        tag: "数据",
+        category: "material",
+        icon: "📊",
+        date: "2026-06-05",
+        link: "materials.html"
+    },
+    {
+        id: 2,
         title: "编程学习路线图",
         summary: "从入门到进阶的系统学习路径，涵盖前端、后端和全栈。",
         tag: "笔记",
@@ -13,7 +23,7 @@ const POSTS = [
         link: "materials.html"
     },
     {
-        id: 2,
+        id: 3,
         title: "设计资源合集",
         summary: "收集的各种设计素材、参考网站和配色工具。",
         tag: "资源",
@@ -23,7 +33,7 @@ const POSTS = [
         link: "materials.html"
     },
     {
-        id: 3,
+        id: 4,
         title: "旅行摄影精选",
         summary: "旅途中记录下的风景和人文瞬间。",
         tag: "摄影",
@@ -31,16 +41,6 @@ const POSTS = [
         icon: "📷",
         date: "2026-06-06",
         link: "gallery.html"
-    },
-    {
-        id: 4,
-        title: "周末 Vlog",
-        summary: "记录周末去公园散步的随手拍。",
-        tag: "Vlog",
-        category: "video",
-        icon: "🎥",
-        date: "2026-06-05",
-        link: "videos.html"
     }
 ];
 
@@ -54,7 +54,8 @@ const VIDEOS = [
 ];
 
 const MATERIALS = [
-    // 示例： { icon: "📄", title: "标题", desc: "描述", tags: ["标签1"], date: "2026-06-08" }
+    { icon: "📊", title: "ETF 份额统计", desc: "最新的 ETF 份额统计数据，包含各基金份额变化情况。", tags: ["ETF", "数据", "Excel"], date: "2026-06-05", link: "assets/posts/ETF份额统计.xlsx" },
+    // 示例： { icon: "📄", title: "标题", desc: "描述", tags: ["标签1"], date: "2026-06-08", link: "文件路径" }
 ];
 
 /* ===== 渲染函数 ===== */
@@ -151,8 +152,8 @@ function renderMaterials() {
         return;
     }
 
-    container.innerHTML = MATERIALS.map(m =>
-        `<div class="material-item">
+    container.innerHTML = MATERIALS.map(m => {
+        const inner = `
             <div class="material-icon">${m.icon || '📄'}</div>
             <div class="material-content">
                 <h3>${m.title}</h3>
@@ -162,8 +163,13 @@ function renderMaterials() {
                     ${(m.tags || []).map(t => `<span class="material-tag">${t}</span>`).join('')}
                 </div>
             </div>
-        </div>`
-    ).join("");
+            <div class="material-download">⬇️</div>
+        `;
+        if (m.link) {
+            return `<a class="material-item" href="${m.link}" download="${m.title}.xlsx">${inner}</a>`;
+        }
+        return `<div class="material-item">${inner}</div>`;
+    }).join("");
 }
 
 /* ===== Lightbox ===== */

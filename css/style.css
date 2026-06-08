@@ -404,6 +404,18 @@ video { max-width: 100%; height: auto; display: block; }
     border-color: var(--accent);
 }
 
+.material-download {
+    font-size: 1.2rem;
+    flex-shrink: 0;
+    align-self: center;
+    opacity: 0.5;
+    transition: opacity 0.2s;
+}
+
+.material-item:hover .material-download {
+    opacity: 1;
+}
+
 .material-icon {
     font-size: 1.6rem;
     flex-shrink: 0;
