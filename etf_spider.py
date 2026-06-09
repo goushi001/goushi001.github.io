@@ -17,7 +17,7 @@ from openpyxl import load_workbook
 
 
 # ================= 配置区 =================
-# GitHub Actions 环境：脚本与 Excel 在同一仓库
+# GitHub Actions 环境：自动定位仓库路径
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 EXCEL_FILE_PATH = os.path.join(SCRIPT_DIR, "assets", "posts", "ETF份额统计.xlsx")
 
@@ -38,7 +38,75 @@ SZSE_LIST = [
 SEARCH_ROW = 13
 DATA_START_ROW = 18
 DATE_COL = 3
+
+# 市值填入行配置
+ROW_DAILY = 10     # 普通交易日
+ROW_WEEKLY = 9     # 周最后交易日
+ROW_MONTHLY = 8    # 月最后交易日
+ROW_QUARTERLY = 7  # 季度最后交易日
 # ==========================================
+
+
+# ─────────────────────────────────────────
+# 日期判断工具函数
+# ─────────────────────────────────────────
+def check_trading_day():
+    """前置判断：昨天是否为A股交易日，不是则退出"""
+    yesterday = date.today() - timedelta(days=1)
+    if not is_workday(yesterday):
+        print(f"{'='*55}")
+        print(f" ETF 份额采集 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"{'='*55}")
+        print(f"\n⏭️ 昨天 {yesterday} 非A股交易日，今日无需运行，退出。")
+        print(f"{'='*55}")
+        return False
+    return True
+
+
+def get_next_trading_day(d):
+    """获取d之后的第一个交易日"""
+    next_day = d + timedelta(days=1)
+    while not is_workday(next_day):
+        next_day += timedelta(days=1)
+    return next_day
+
+
+def is_last_trading_day_of_week(d):
+    """d是否为本周最后一个交易日（下一个交易日已是下一周）"""
+    next_td = get_next_trading_day(d)
+    return next_td.isocalendar()[1] != d.isocalendar()[1]
+
+
+def is_last_trading_day_of_month(d):
+    """d是否为本月最后一个交易日（下一个交易日已是下个月）"""
+    next_td = get_next_trading_day(d)
+    return next_td.month != d.month
+
+
+def is_last_trading_day_of_quarter(d):
+    """d是否为本季度最后一个交易日"""
+    if d.month not in [3, 6, 9, 12]:
+        return False
+    return is_last_trading_day_of_month(d)
+
+
+def get_market_value_target_row(yesterday):
+    """
+    根据昨天的日期性质，返回市值应填入的行号
+    优先级：季末 > 月末 > 周末 > 普通交易日
+    """
+    if is_last_trading_day_of_quarter(yesterday):
+        print(f" 📊 昨天 {yesterday} 是季度最后交易日 → 市值填入第{ROW_QUARTERLY}行")
+        return ROW_QUARTERLY
+    elif is_last_trading_day_of_month(yesterday):
+        print(f" 📊 昨天 {yesterday} 是月份最后交易日 → 市值填入第{ROW_MONTHLY}行")
+        return ROW_MONTHLY
+    elif is_last_trading_day_of_week(yesterday):
+        print(f" 📊 昨天 {yesterday} 是本周最后交易日 → 市值填入第{ROW_WEEKLY}行")
+        return ROW_WEEKLY
+    else:
+        print(f" 📊 昨天 {yesterday} 是普通交易日 → 市值填入第{ROW_DAILY}行")
+        return ROW_DAILY
 
 
 def shift_formula_rows(formula, delta):
@@ -56,10 +124,6 @@ def shift_formula_rows(formula, delta):
 # 第一步：准备 Excel（腾行 + 写公式）
 # ─────────────────────────────────────────
 def prepare_excel_new_row():
-    """
-    不使用 insert_rows，手动将第18行内容搬到第19行，
-    再把公式原样写回第18行，数字列留空等待填入新数据。
-    """
     if not os.path.exists(EXCEL_FILE_PATH):
         print(f"❌ 找不到 Excel: {EXCEL_FILE_PATH}")
         return None
@@ -69,7 +133,6 @@ def prepare_excel_new_row():
         ws = wb.active
         print(f"📋 工作表: {ws.title}")
 
-        # 扫描第13行，建立 代码→列 映射
         code_to_col = {}
         for col in range(1, ws.max_column + 1):
             val = ws.cell(SEARCH_ROW, col).value
@@ -82,13 +145,11 @@ def prepare_excel_new_row():
                     pass
         print(f" 找到 {len(code_to_col)} 个ETF代码映射")
 
-        # 读取第18行快照
         row18_snapshot = {
             col: ws.cell(DATA_START_ROW, col).value
             for col in range(1, ws.max_column + 1)
         }
 
-        # 将第18行内容搬到第19行（公式行号+1，其余原样）
         for col, val in row18_snapshot.items():
             if val is None:
                 continue
@@ -97,7 +158,6 @@ def prepare_excel_new_row():
             else:
                 ws.cell(DATA_START_ROW + 1, col).value = val
 
-        # 清空第18行，把公式原样写回（行号不变=天然正确）
         for col in range(1, ws.max_column + 1):
             ws.cell(DATA_START_ROW, col).value = None
         for col, val in row18_snapshot.items():
@@ -148,10 +208,11 @@ def fetch_szse_data(code_list):
 
 
 def extract_sse_data_dom(driver, code, max_retries=2):
-    """读 DOM，返回 (份额万份, 日期字符串)"""
+    """读 DOM，返回 (份额万份, 市值亿元, 日期字符串)"""
     for attempt in range(1, max_retries + 1):
         try:
             wait = WebDriverWait(driver, 15)
+            # 等待基金规模表格加载
             wait.until(EC.presence_of_element_located(
                 (By.CSS_SELECTOR, "div.js_fundSize table.table tbody tr")
             ))
@@ -164,20 +225,35 @@ def extract_sse_data_dom(driver, code, max_retries=2):
                     raw_date = tds[0].text.strip()
                     raw_share = tds[-1].text.replace(',', '').strip()
                     share_val = float(raw_share)
+
+                    # 市值：等待成交统计表格加载，取第一个 colData_val
+                    wait.until(EC.presence_of_element_located(
+                        (By.CSS_SELECTOR, "div.js_transactionOverview td.colData_val")
+                    ))
+                    market_tds = driver.find_elements(
+                        By.CSS_SELECTOR, "div.js_transactionOverview td.colData_val"
+                    )
+                    market_val = None
+                    if market_tds:
+                        raw_market = market_tds[0].text.replace(',', '').strip()
+                        market_val = round(float(raw_market) / 10000, 6)
+
                     if share_val > 0:
                         parts = raw_date.split("-")
                         date_fmt = f"{parts[0]}//{int(parts[1])}/{int(parts[2])}"
-                        return share_val, date_fmt
+                        return share_val, market_val, date_fmt
+
         except Exception as e:
             if attempt < max_retries:
                 time.sleep(2)
             else:
                 print(f" ⚠️ DOM读取失败 {code}: {e}")
-    return None, None
+    return None, None, None
 
 
 def fetch_sse_data(code_list):
-    results_map = {}
+    share_map = {}
+    market_map = {}
     failed_list = []
     detected_date = None
 
@@ -202,12 +278,15 @@ def fetch_sse_data(code_list):
                     f"index.shtml?FUNDID={code}"
                 )
                 driver.execute_script("window.scrollTo(0, 1800);")
-                share, date_str = extract_sse_data_dom(driver, code)
+                share, market, date_str = extract_sse_data_dom(driver, code)
                 if share:
-                    results_map[str(code)] = share
+                    share_map[str(code)] = share
+                    if market is not None:
+                        market_map[str(code)] = market
                     if detected_date is None and date_str:
                         detected_date = date_str
-                    print(f" [{idx}/{len(code_list)}] ✅ 沪市 {code}: {share:.2f} 万份 日期: {date_str}")
+                    mkt_str = f" 市值={market:.4f}亿" if market else " 市值=N/A"
+                    print(f" [{idx}/{len(code_list)}] ✅ 沪市 {code}: 份额={share:.2f}万份{mkt_str} 日期={date_str}")
                 else:
                     failed_list.append(code)
                     print(f" [{idx}/{len(code_list)}] ⚠️ 沪市 {code} 失败")
@@ -219,13 +298,13 @@ def fetch_sse_data(code_list):
 
     if failed_list:
         print(f"\n⚠️ 未获取到数据的沪市ETF: {failed_list}")
-    return results_map, detected_date
+    return share_map, market_map, detected_date
 
 
 # ─────────────────────────────────────────
-# 第三步：将数据填入第18行
+# 第三步：将数据填入 Excel
 # ─────────────────────────────────────────
-def fill_excel_data(code_to_col, data_dict, data_date):
+def fill_excel_data(code_to_col, share_dict, market_dict, data_date, market_target_row):
     try:
         wb = load_workbook(EXCEL_FILE_PATH)
         ws = wb.active
@@ -240,20 +319,27 @@ def fill_excel_data(code_to_col, data_dict, data_date):
             ws.cell(DATA_START_ROW, DATE_COL).value = date_fmt
             print(f"\n 📅 日期（系统备用）: {date_fmt}")
 
-        # 填份额（直接覆盖，有旧值也没关系）
-        filled_count = 0
-        for code, share_val in data_dict.items():
-            code_str = str(code)
-            if code_str in code_to_col:
-                share_col = code_to_col[code_str] + 2
+        # 填份额
+        filled_share = 0
+        for code, share_val in share_dict.items():
+            if code in code_to_col:
+                share_col = code_to_col[code] + 2
                 ws.cell(DATA_START_ROW, share_col).value = float(share_val)
-                filled_count += 1
-                print(f" 🎯 {code_str} → col{share_col}: {float(share_val):.2f} 万份")
-            else:
-                print(f" ⚠️ {code_str} 未在第{SEARCH_ROW}行找到对应列")
+                filled_share += 1
+        print(f" 📈 份额填入完成: {filled_share}/{len(share_dict)} 只")
+
+        # 填市值（只有上交所ETF有市值数据）
+        filled_market = 0
+        for code, market_val in market_dict.items():
+            if code in code_to_col:
+                market_col = code_to_col[code]
+                ws.cell(market_target_row, market_col).value = float(market_val)
+                filled_market += 1
+                print(f" 💰 {code} 市值 {market_val:.4f}亿 → 第{market_target_row}行 col{market_col}")
+        print(f" 💰 市值填入完成: {filled_market}/{len(market_dict)} 只 → 第{market_target_row}行")
 
         wb.save(EXCEL_FILE_PATH)
-        print(f"\n✨ 全部完成！成功填入 {filled_count}/{len(data_dict)} 只ETF份额")
+        print(f"\n✨ 全部完成！份额写入第{DATA_START_ROW}行，市值写入第{market_target_row}行")
 
     except Exception as e:
         print(f"❌ 数据填入失败（请先关闭文件）: {e}")
@@ -265,6 +351,13 @@ def fill_excel_data(code_to_col, data_dict, data_date):
 # 主程序
 # ─────────────────────────────────────────
 def run_integration():
+    # 前置判断：昨天不是交易日则直接退出
+    if not check_trading_day():
+        return
+
+    yesterday = date.today() - timedelta(days=1)
+    market_target_row = get_market_value_target_row(yesterday)
+
     start_time = datetime.now()
     print(f"{'='*55}")
     print(f" ETF 份额采集 {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
@@ -279,27 +372,19 @@ def run_integration():
 
     # 第二步：抓取数据
     print("\n【第二步】抓取数据...")
-    final_results = fetch_szse_data(SZSE_LIST)
-    sse_results, data_date = fetch_sse_data(SSE_LIST)
-    final_results.update(sse_results)
+    final_share = fetch_szse_data(SZSE_LIST)
+    sse_share, market_dict, data_date = fetch_sse_data(SSE_LIST)
+    final_share.update(sse_share)
 
     # 第三步：填入数据
     print("\n【第三步】填入数据...")
-    fill_excel_data(code_to_col, final_results, data_date)
+    fill_excel_data(code_to_col, final_share, market_dict, data_date, market_target_row)
 
     elapsed = (datetime.now() - start_time).seconds
-    print(f"\n📊 采集汇总: 成功 {len(final_results)}/{len(SSE_LIST)+len(SZSE_LIST)} 只")
+    print(f"\n📊 采集汇总: 份额 {len(final_share)}/{len(SSE_LIST)+len(SZSE_LIST)} 只 市值 {len(market_dict)}/{len(SSE_LIST)} 只")
     print(f"⏱️ 总耗时: {elapsed // 60} 分 {elapsed % 60} 秒")
     print(f"{'='*55}")
 
 
 if __name__ == "__main__":
-    # ── 前置判断：昨天是否为A股交易日 ──
-    yesterday = date.today() - timedelta(days=1)
-    if not is_workday(yesterday):
-        print(f"⏭️ {yesterday} 非A股交易日（周末或法定节假日），今日不运行，跳过。")
-        exit(0)
-    else:
-        print(f"✅ {yesterday} 是交易日，开始采集流程...")
-
     run_integration()
