@@ -4,7 +4,8 @@ import re
 import requests
 import pandas as pd
 from io import BytesIO
-from datetime import datetime
+from datetime import datetime, date, timedelta
+from chinese_calendar import is_workday
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
@@ -293,4 +294,12 @@ def run_integration():
 
 
 if __name__ == "__main__":
+    # ── 前置判断：昨天是否为A股交易日 ──
+    yesterday = date.today() - timedelta(days=1)
+    if not is_workday(yesterday):
+        print(f"⏭️ {yesterday} 非A股交易日（周末或法定节假日），今日不运行，跳过。")
+        exit(0)
+    else:
+        print(f"✅ {yesterday} 是交易日，开始采集流程...")
+
     run_integration()
