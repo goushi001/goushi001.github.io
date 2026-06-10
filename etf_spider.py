@@ -177,32 +177,55 @@ def prepare_excel_new_row():
 
 def fetch_szse_data(code_list):
     url = "https://www.szse.cn/api/report/ShowReport?SHOWTYPE=xlsx&CATALOGID=1105&TABKEY=tab1"
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+        "Referer": "https://www.szse.cn/",
+    }
     results_map = {}
-    try:
-        print(f"\n--- 正在同步深交所数据 ({datetime.now().strftime('%H:%M:%S')}) ---")
-        response = requests.get(url, headers=headers, timeout=15)
-        df = pd.read_excel(BytesIO(response.content), header=None)
-        df_str = df.astype(str)
-        for code in code_list:
-            mask = df_str.apply(lambda row: row.str.contains(str(code)).any(), axis=1)
-            target_row = df[mask]
-            if not target_row.empty:
-                shares_val = 0.0
-                for val in target_row.iloc[0].values:
-                    try:
-                        temp_val = float(str(val).replace(',', '').strip())
-                        if temp_val > 1000000:
-                            shares_val = temp_val
-                    except:
-                        pass
-                if shares_val > 0:
-                    results_map[str(code)] = shares_val / 10000
-                    print(f"   ✅ 深交所 {code}: {shares_val/10000:.2f} 万份")
+    print(f"\n--- 正在同步深交所数据 ({datetime.now().strftime('%H:%M:%S')}) ---")
+
+    # 重试3次，应对 GitHub Actions 海外网络不稳定
+    for attempt in range(1, 4):
+        try:
+            response = requests.get(url, headers=headers, timeout=30)
+            if len(response.content) < 1000:
+                print(f"   ⚠️ 第{attempt}次返回为空({len(response.content)} bytes)，重试中...")
+                time.sleep(3 * attempt)
+                continue
+
+            df = pd.read_excel(BytesIO(response.content), header=None)
+            df_str = df.astype(str)
+            for code in code_list:
+                mask = df_str.apply(lambda row: row.str.contains(str(code)).any(), axis=1)
+                target_row = df[mask]
+                if not target_row.empty:
+                    shares_val = 0.0
+                    for val in target_row.iloc[0].values:
+                        try:
+                            temp_val = float(str(val).replace(',', '').strip())
+                            if temp_val > 1000000:
+                                shares_val = temp_val
+                        except:
+                            pass
+                    if shares_val > 0:
+                        results_map[str(code)] = shares_val / 10000
+                        print(f"   ✅ 深交所 {code}: {shares_val/10000:.2f} 万份")
+                else:
+                    print(f"   ⚠️ 深交所未找到: {code}")
+            break  # 成功则退出重试循环
+
+        except Exception as e:
+            print(f"   ⚠️ 第{attempt}次请求失败: {e}")
+            if attempt < 3:
+                print(f"     等待 {3 * attempt}s 后重试...")
+                time.sleep(3 * attempt)
             else:
-                print(f"   ⚠️ 深交所未找到: {code}")
-    except Exception as e:
-        print(f"❌ 深交所同步失败: {e}")
+                print(f"❌ 深交所同步失败（已重试3次）: {e}")
+
+    if len(results_map) < len(code_list):
+        print(f"   ⚠️ 深交所获取到 {len(results_map)}/{len(code_list)} 只，缺少: {[c for c in code_list if c not in results_map]}")
     return results_map
 
 
@@ -320,7 +343,7 @@ def fill_excel_data(code_to_col, share_dict, market_dict, data_date, market_targ
                 share_col = code_to_col[code] + 2
                 ws.cell(DATA_START_ROW, share_col).value = float(share_val)
                 filled_share += 1
-        print(f"   📈 份额填入完成: {filled_share}/{len(share_dict)} 只")
+                print(f"   📈 {code}: {float(share_val):.2f}万份 → col{share_col}")
 
         filled_market = 0
         for code, market_val in market_dict.items():
