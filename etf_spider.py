@@ -176,15 +176,25 @@ def prepare_excel_new_row():
 
 
 def fetch_szse_data(code_list):
-    url = "https://www.szse.cn/api/report/ShowReport?SHOWTYPE=xlsx&CATALOGID=1105&TABKEY=tab1"
+    """
+    深交所ETF数据：通过 fund.szse.cn API 获取 Excel 报表
+    返回 (share_map, market_map)
+      - share_map: code → 份额（万份）
+      - market_map: code → 市值（亿元）= 份额 * 净值 / 1亿
+    """
+    url = (
+        "https://fund.szse.cn/api/report/ShowReport"
+        "?SHOWTYPE=xlsx&CATALOGID=1000_lf&TABKEY=tab1"
+        f"&random={time.time()}"
+    )
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
         "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-        "Referer": "https://www.szse.cn/",
+        "Referer": "https://fund.szse.cn/",
     }
     results_map = {}
-    print(f"\n--- 正在同步深交所数据 ({datetime.now().strftime('%H:%M:%S')}) ---")
+    market_map = {}
 
     # 重试3次，应对 GitHub Actions 海外网络不稳定
     for attempt in range(1, 4):
@@ -195,38 +205,45 @@ def fetch_szse_data(code_list):
                 time.sleep(3 * attempt)
                 continue
 
-            df = pd.read_excel(BytesIO(response.content), header=None)
-            df_str = df.astype(str)
+            df = pd.read_excel(BytesIO(response.content))
+
+            # 清洗份额列（含逗号字符串 → 数值）
+            df['当前规模(份)'] = df['当前规模(份)'].astype(str).str.replace(',', '').str.strip()
+            df['当前规模(份)'] = pd.to_numeric(df['当前规模(份)'], errors='coerce')
+
+            missing_codes = []
             for code in code_list:
-                mask = df_str.apply(lambda row: row.str.contains(str(code)).any(), axis=1)
+                mask = df['基金代码'].astype(str).str.strip() == str(code)
                 target_row = df[mask]
                 if not target_row.empty:
-                    shares_val = 0.0
-                    for val in target_row.iloc[0].values:
-                        try:
-                            temp_val = float(str(val).replace(',', '').strip())
-                            if temp_val > 1000000:
-                                shares_val = temp_val
-                        except:
-                            pass
-                    if shares_val > 0:
-                        results_map[str(code)] = shares_val / 10000
-                        print(f"   ✅ 深交所 {code}: {shares_val/10000:.2f} 万份")
+                    shares = target_row.iloc[0]['当前规模(份)']
+                    nav = target_row.iloc[0]['净值']
+                    if pd.notna(shares) and pd.notna(nav) and shares > 0:
+                        market_val = round(shares * nav / 100_000_000, 6)  # 亿元
+                        results_map[str(code)] = shares / 10_000  # 万份
+                        market_map[str(code)] = market_val
+                        print(f"   ✅ 深交所 {code}: {shares/10000:.2f} 万份  净值={nav}  市值={market_val:.4f}亿")
+                    else:
+                        print(f"   ⚠️ 深交所 {code}: 份额或净值为空")
+                        missing_codes.append(code)
                 else:
                     print(f"   ⚠️ 深交所未找到: {code}")
+                    missing_codes.append(code)
+
+            print(f"   📊 深交所合计: 份额 {len(results_map)}/{len(code_list)} 只, 市值 {len(market_map)}/{len(code_list)} 只")
+            if missing_codes:
+                print(f"   ⚠️ 未获取到的: {missing_codes}")
             break  # 成功则退出重试循环
 
         except Exception as e:
-            print(f"   ⚠️ 第{attempt}次请求失败: {e}")
+            print(f"   ⚠️ 第{attempt}次深交所请求失败: {e}")
             if attempt < 3:
                 print(f"     等待 {3 * attempt}s 后重试...")
                 time.sleep(3 * attempt)
             else:
                 print(f"❌ 深交所同步失败（已重试3次）: {e}")
 
-    if len(results_map) < len(code_list):
-        print(f"   ⚠️ 深交所获取到 {len(results_map)}/{len(code_list)} 只，缺少: {[c for c in code_list if c not in results_map]}")
-    return results_map
+    return results_map, market_map
 
 
 def extract_sse_data_dom(driver, code, max_retries=2):
@@ -343,7 +360,8 @@ def fill_excel_data(code_to_col, share_dict, market_dict, data_date, market_targ
                 share_col = code_to_col[code] + 2
                 ws.cell(DATA_START_ROW, share_col).value = float(share_val)
                 filled_share += 1
-                print(f"   📈 {code}: {float(share_val):.2f}万份 → col{share_col}")
+
+        print(f"   📈 份额写入完成: {filled_share}/{len(share_dict)} 只 → 第{DATA_START_ROW}行")
 
         filled_market = 0
         for code, market_val in market_dict.items():
@@ -352,13 +370,14 @@ def fill_excel_data(code_to_col, share_dict, market_dict, data_date, market_targ
                 ws.cell(market_target_row, market_col).value = float(market_val)
                 filled_market += 1
                 print(f"   💰 {code} 市值 {market_val:.4f}亿 → 第{market_target_row}行 col{market_col}")
-        print(f"   💰 市值填入完成: {filled_market}/{len(market_dict)} 只 → 第{market_target_row}行")
+
+        print(f"   💰 市值写入完成: {filled_market}/{len(market_dict)} 只 → 第{market_target_row}行")
 
         wb.save(EXCEL_FILE_PATH)
         print(f"\n✨ 全部完成！份额写入第{DATA_START_ROW}行，市值写入第{market_target_row}行")
 
     except Exception as e:
-        print(f"❌ 数据填入失败（请先关闭文件）: {e}")
+        print(f"❌ 数据写入失败: {e}")
         import traceback
         traceback.print_exc()
 
@@ -382,15 +401,23 @@ def run_integration():
         return
 
     print("\n【第二步】抓取数据...")
-    final_share = fetch_szse_data(SZSE_LIST)
-    sse_share, market_dict, data_date = fetch_sse_data(SSE_LIST)
-    final_share.update(sse_share)
+    # 深交所：返回 (份额, 市值)
+    szse_share, szse_market = fetch_szse_data(SZSE_LIST)
+    # 上交所：返回 (份额, 市值, 日期)
+    sse_share, sse_market, data_date = fetch_sse_data(SSE_LIST)
+
+    # 合并沪深份额 + 沪深市值
+    final_share = {**szse_share, **sse_share}
+    all_market  = {**szse_market, **sse_market}
 
     print("\n【第三步】填入数据...")
-    fill_excel_data(code_to_col, final_share, market_dict, data_date, market_target_row)
+    fill_excel_data(code_to_col, final_share, all_market, data_date, market_target_row)
 
     elapsed = (datetime.now() - start_time).seconds
-    print(f"\n📊 采集汇总: 份额 {len(final_share)}/{len(SSE_LIST)+len(SZSE_LIST)} 只  市值 {len(market_dict)}/{len(SSE_LIST)} 只")
+    total_count = len(SSE_LIST) + len(SZSE_LIST)
+    print(f"\n📊 采集汇总:")
+    print(f"   份额: {len(final_share)}/{total_count} 只")
+    print(f"   市值: {len(all_market)}/{total_count} 只（含沪深）")
     print(f"⏱️  总耗时: {elapsed // 60} 分 {elapsed % 60} 秒")
     print(f"{'='*55}")
 
