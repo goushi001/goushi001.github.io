@@ -48,11 +48,19 @@ MAX_HISTORY_ROW = 163
 # ==========================================
 
 
+def get_beijing_date():
+    """获取北京时间日期（GitHub Actions 使用 UTC，需 +8h 校正）"""
+    beijing_now = datetime.utcnow() + timedelta(hours=8)
+    return beijing_now.date()
+
+
 def check_trading_day():
-    yesterday = date.today() - timedelta(days=1)
+    bj_today = get_beijing_date()
+    yesterday = bj_today - timedelta(days=1)
     if not is_workday(yesterday):
         print(f"{'='*55}")
-        print(f"  ETF 份额采集  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        bj_now = datetime.utcnow() + timedelta(hours=8)
+        print(f"  ETF 份额采集  {bj_now.strftime('%Y-%m-%d %H:%M:%S')}")
         print(f"{'='*55}")
         print(f"\n⏭️  昨天 {yesterday} 非A股交易日，今日无需运行，退出。")
         print(f"{'='*55}")
@@ -349,8 +357,8 @@ def fill_excel_data(code_to_col, share_dict, market_dict, data_date, market_targ
             ws.cell(DATA_START_ROW, DATE_COL).value = data_date
             print(f"\n   📅 日期（来自上交所）: {data_date}")
         else:
-            today = datetime.now()
-            date_fmt = f"{today.year}//{today.month}/{today.day}"
+            bj_today = get_beijing_date()
+            date_fmt = f"{bj_today.year}//{bj_today.month}/{bj_today.day}"
             ws.cell(DATA_START_ROW, DATE_COL).value = date_fmt
             print(f"\n   📅 日期（系统备用）: {date_fmt}")
 
@@ -386,7 +394,8 @@ def run_integration():
     if not check_trading_day():
         return
 
-    yesterday = date.today() - timedelta(days=1)
+    bj_today = get_beijing_date()
+    yesterday = bj_today - timedelta(days=1)
     market_target_row = get_market_value_target_row(yesterday)
 
     start_time = datetime.now()
