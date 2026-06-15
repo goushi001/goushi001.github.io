@@ -67,7 +67,7 @@ ROW_NAV_MONTHLY = 14  # 月末净值
 ROW_CASH_FLOW   = 16  # 每日资金流动（亿元）
 
 # ⚠️ 测试模式：True=跳过交易日检查，False=正常
-TEST_MODE = True
+TEST_MODE = False
 # ==========================================
 
 
