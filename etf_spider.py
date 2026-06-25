@@ -21,7 +21,6 @@ from openpyxl import load_workbook
 
 # ================= 配置区 =================
 
-# Excel 路径自动检测
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 if sys.platform == "win32":
     DEFAULT_EXCEL = r"D:\00python\ETF份额统计.xlsx"
@@ -46,39 +45,32 @@ SZSE_LIST = [
     '159745', '159611', '159851', '159920', '159567', '159928', '159998', '159985'
 ]
 
-# Excel 行号常量
-SEARCH_ROW     = 13   # ETF 代码映射行
-DATA_START_ROW = 18   # 份额数据起始行
-DATE_COL       = 3    # 日期列
-MAX_HISTORY_ROW = 163 # 历史数据上限行
+SEARCH_ROW      = 13
+DATA_START_ROW  = 18
+DATE_COL        = 3
+MAX_HISTORY_ROW = 163
 
-# 市值行号
 ROW_QUARTERLY = 7
 ROW_MONTHLY   = 8
 ROW_WEEKLY    = 9
 ROW_DAILY     = 10
 
-# 净值 & 资金流动行号
-ROW_NAV_DAILY   = 15  # 每日净值
-ROW_NAV_MONTHLY = 14  # 月末净值
-ROW_CASH_FLOW   = 16  # 每日资金流动（亿元）
+ROW_NAV_DAILY   = 15
+ROW_NAV_MONTHLY = 14
+ROW_CASH_FLOW   = 16
 
-# ⚠️ 测试模式：True=跳过交易日检查，False=正常
 TEST_MODE = False
 # ==========================================
 
 
 def get_beijing_date():
-    """获取北京时间日期（GitHub Actions 使用 UTC，需 +8h 校正）"""
     return (datetime.utcnow() + timedelta(hours=8)).date()
 
 
 def check_trading_day():
-    """检查前一日是否为 A 股交易日"""
     if TEST_MODE:
         print("⚠️  [测试模式] 已跳过交易日检查，强制运行")
         return True
-
     bj_today  = get_beijing_date()
     yesterday = bj_today - timedelta(days=1)
     if not is_workday(yesterday):
@@ -129,7 +121,6 @@ def get_market_value_target_row(yesterday):
 
 
 def shift_formula_rows(formula, delta):
-    """Excel 公式行号偏移"""
     if not isinstance(formula, str) or not formula.startswith('='):
         return formula
     def replace_row(match):
@@ -138,18 +129,15 @@ def shift_formula_rows(formula, delta):
 
 
 def prepare_excel_new_row():
-    """准备 Excel：检查文件、下移历史数据、清空第18行"""
     if not os.path.exists(EXCEL_FILE_PATH):
         print(f"❌ 找不到 Excel: {EXCEL_FILE_PATH}")
         return None
-
     try:
         with open(EXCEL_FILE_PATH, 'a'):
             pass
     except IOError:
         print(f"❌ 文件正在被占用！请先关闭 Excel 后再运行。")
         return None
-
     try:
         wb = load_workbook(EXCEL_FILE_PATH)
         ws = wb.active
@@ -203,14 +191,10 @@ def prepare_excel_new_row():
 
 def fetch_szse_data(code_list):
     """
-    深交所 ETF 数据
+    深交所 ETF 数据（最多重试3次）
+    触发重试条件：①响应内容 <1000 bytes  ②份额或涨跌幅有缺漏
     返回 (share_map, market_map, nav_map, change_map)
     """
-    url = (
-        "https://fund.szse.cn/api/report/ShowReport"
-        "?SHOWTYPE=xlsx&CATALOGID=1000_lf&TABKEY=tab1"
-        f"&random={time.time()}"
-    )
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
@@ -225,8 +209,15 @@ def fetch_szse_data(code_list):
 
     for attempt in range(1, 4):
         try:
+            url = (
+                "https://fund.szse.cn/api/report/ShowReport"
+                "?SHOWTYPE=xlsx&CATALOGID=1000_lf&TABKEY=tab1"
+                f"&random={time.time()}"
+            )
             print(f"\n--- 正在同步深交所数据 (尝试 {attempt}/3) ---")
             response = requests.get(url, headers=headers, timeout=30)
+
+            # ① 响应内容过小 → 重试
             if len(response.content) < 1000:
                 print(f"   ⚠️ 第{attempt}次返回为空({len(response.content)} bytes)，重试中...")
                 time.sleep(3 * attempt)
@@ -238,7 +229,7 @@ def fetch_szse_data(code_list):
             )
             df['当前规模(份)'] = pd.to_numeric(df['当前规模(份)'], errors='coerce')
 
-            # 尝试找涨跌幅列（列名可能含"涨跌"或"升跌"）
+            # 自动识别涨跌幅列
             change_col = next(
                 (c for c in df.columns if any(k in str(c) for k in ['涨跌幅', '涨跌', '升跌'])),
                 None
@@ -248,6 +239,12 @@ def fetch_szse_data(code_list):
             else:
                 print(f"   ⚠️ 深交所主表未找到涨跌幅列，列名: {list(df.columns)}")
 
+            # 逐只解析
+            tmp_share  = {}
+            tmp_market = {}
+            tmp_nav    = {}
+            tmp_change = {}
+
             for code in code_list:
                 mask       = df['基金代码'].astype(str).str.strip() == str(code)
                 target_row = df[mask]
@@ -256,27 +253,38 @@ def fetch_szse_data(code_list):
                     nav    = target_row.iloc[0]['净值']
                     if pd.notna(shares) and pd.notna(nav) and shares > 0:
                         market_val = round(shares * nav / 100_000_000, 6)
-                        results_map[str(code)] = shares / 10_000
-                        market_map[str(code)]  = market_val
-                        nav_map[str(code)]     = float(nav)
-
-                        # 涨跌幅（单位：%，除以100转为小数）
+                        tmp_share[str(code)]  = shares / 10_000
+                        tmp_market[str(code)] = market_val
+                        tmp_nav[str(code)]    = float(nav)
                         if change_col:
                             raw_chg = target_row.iloc[0][change_col]
                             if pd.notna(raw_chg):
                                 try:
-                                    change_map[str(code)] = round(float(raw_chg) / 100, 6)
+                                    tmp_change[str(code)] = round(float(raw_chg) / 100, 6)
                                 except:
                                     pass
-
-                        chg_str = f"{change_map[str(code)]*100:.2f}%" if str(code) in change_map else "涨跌幅未获取"
+                        chg_str = f"{tmp_change[str(code)]*100:.2f}%" if str(code) in tmp_change else "涨跌幅未获取"
                         print(f"   ✅ 深交所 {code}: {shares/10000:.2f} 万份"
                               f"  净值={nav}  涨跌幅={chg_str}  市值={market_val:.4f}亿")
                     else:
                         print(f"   ⚠️ 深交所 {code}: 份额或净值为空")
                 else:
                     print(f"   ⚠️ 深交所未找到: {code}")
-            break  # 成功则跳出重试循环
+
+            # ② 涨跌幅有缺漏 → 重试（份额已有则不重试份额，只重试整体以拿齐涨跌幅）
+            missing_change = [c for c in code_list if str(c) not in tmp_change]
+            if missing_change and attempt < 3:
+                print(f"   ⚠️ 第{attempt}次：{len(missing_change)} 只涨跌幅未获取"
+                      f"（{missing_change[:5]}{'...' if len(missing_change) > 5 else ''}），重试中...")
+                time.sleep(3 * attempt)
+                continue  # 重新拉取整张表
+
+            # 本次成功，写入最终结果
+            results_map = tmp_share
+            market_map  = tmp_market
+            nav_map     = tmp_nav
+            change_map  = tmp_change
+            break
 
         except Exception as e:
             if attempt < 3:
@@ -331,7 +339,7 @@ def extract_sse_data_dom(driver, code, max_retries=2):
                     except:
                         pass
 
-                    # 成交概览区域：第1个td=基金规模（市值，单位万亿→亿）
+                    # 成交概览区域：第1个td=基金规模（市值）
                     try:
                         wait.until(EC.presence_of_element_located(
                             (By.CSS_SELECTOR, "div.js_transactionOverview td.colData_val")
@@ -458,9 +466,9 @@ def fill_excel_data(code_to_col, share_dict, market_dict, data_date,
         print(f"   💰 市值填入完成: {filled_market}/{len(market_dict)} 只 → 第{market_target_row}行")
 
         # ── 净值 / 月末净值 / 资金流动 ──
-        filled_nav        = 0
-        filled_nav_month  = 0
-        filled_cash_flow  = 0
+        filled_nav       = 0
+        filled_nav_month = 0
+        filled_cash_flow = 0
 
         for code, nav_val in nav_dict.items():
             if code not in code_to_col:
@@ -468,16 +476,13 @@ def fill_excel_data(code_to_col, share_dict, market_dict, data_date,
             market_col = code_to_col[code]
             share_col  = code_to_col[code] + 2
 
-            # 第15行：每日净值
             ws.cell(ROW_NAV_DAILY, market_col).value = float(nav_val)
             filled_nav += 1
 
-            # 第14行：仅月末写入净值
             if is_month_end:
                 ws.cell(ROW_NAV_MONTHLY, market_col).value = float(nav_val)
                 filled_nav_month += 1
 
-            # 第16行：资金流动 = 净值 × (当日份额 - 前日份额)
             share_today     = ws.cell(DATA_START_ROW,     share_col).value
             share_yesterday = ws.cell(DATA_START_ROW + 1, share_col).value
 
@@ -511,7 +516,7 @@ def fill_excel_data(code_to_col, share_dict, market_dict, data_date,
                 cell.value         = float(chg_val)
                 cell.number_format = '0.00%'
                 filled_change += 1
-        print(f"   📊 涨跌幅填入完成: {filled_change}/{len(change_dict)} 只 → 第{DATA_START_ROW}行 (+6列)")
+        print(f"   📊 涨跌幅填入完成: {filled_change}/{len(change_dict)} 只 → 第{DATA_START_ROW}行(+6列)")
 
         wb.save(EXCEL_FILE_PATH)
         total = len(SSE_LIST) + len(SZSE_LIST)
