@@ -223,6 +223,7 @@ def fetch_szse_data(code_list):
     nav_map     = {}
     change_map  = {}
 
+    # ── 主接口：份额/净值/市值（已带重试）──
     for attempt in range(1, 4):
         try:
             print(f"\n--- 正在同步深交所数据 (尝试 {attempt}/3) ---")
@@ -238,16 +239,6 @@ def fetch_szse_data(code_list):
             )
             df['当前规模(份)'] = pd.to_numeric(df['当前规模(份)'], errors='coerce')
 
-            # 尝试找涨跌幅列（列名可能含"涨跌"或"升跌"）
-            change_col = next(
-                (c for c in df.columns if any(k in str(c) for k in ['涨跌幅', '涨跌', '升跌'])),
-                None
-            )
-            if change_col:
-                print(f"   📊 深交所涨跌幅列: 「{change_col}」")
-            else:
-                print(f"   ⚠️ 深交所主表未找到涨跌幅列，列名: {list(df.columns)}")
-
             for code in code_list:
                 mask       = df['基金代码'].astype(str).str.strip() == str(code)
                 target_row = df[mask]
@@ -259,19 +250,8 @@ def fetch_szse_data(code_list):
                         results_map[str(code)] = shares / 10_000
                         market_map[str(code)]  = market_val
                         nav_map[str(code)]     = float(nav)
-
-                        # 涨跌幅（单位：%，除以100转为小数）
-                        if change_col:
-                            raw_chg = target_row.iloc[0][change_col]
-                            if pd.notna(raw_chg):
-                                try:
-                                    change_map[str(code)] = round(float(raw_chg) / 100, 6)
-                                except:
-                                    pass
-
-                        chg_str = f"{change_map[str(code)]*100:.2f}%" if str(code) in change_map else "涨跌幅未获取"
                         print(f"   ✅ 深交所 {code}: {shares/10000:.2f} 万份"
-                              f"  净值={nav}  涨跌幅={chg_str}  市值={market_val:.4f}亿")
+                              f"  净值={nav}  市值={market_val:.4f}亿")
                     else:
                         print(f"   ⚠️ 深交所 {code}: 份额或净值为空")
                 else:
@@ -284,6 +264,59 @@ def fetch_szse_data(code_list):
                 time.sleep(3 * attempt)
             else:
                 print(f"❌ 深交所同步失败(已重试3次): {e}")
+
+    # ── 第二接口：涨跌幅（CATALOGID=1815_stock_lf_snapshot，带重试）──
+    bj_date = get_beijing_date()
+    yesterday_str = (bj_date - timedelta(days=1)).strftime("%Y-%m-%d")
+    snap_url = (
+        "https://fund.szse.cn/api/report/ShowReport"
+        "?SHOWTYPE=xlsx&CATALOGID=1815_stock_lf_snapshot&TABKEY=tab1"
+        f"&txtBeginDate={yesterday_str}&txtEndDate={yesterday_str}"
+        f"&random={time.time()}"
+    )
+
+    for attempt in range(1, 4):
+        try:
+            print(f"\n--- 深交所涨跌幅快照 (尝试 {attempt}/3) ---")
+            snap_resp = requests.get(snap_url, headers=headers, timeout=30)
+            if len(snap_resp.content) < 200:
+                print(f"   ⚠️ 第{attempt}次快照返回为空，重试中...")
+                time.sleep(3 * attempt)
+                continue
+
+            df_snap = pd.read_excel(BytesIO(snap_resp.content))
+
+            # 找升跌列和代码列
+            change_col = next(
+                (c for c in df_snap.columns if '升跌' in str(c)), None
+            )
+            code_col = next(
+                (c for c in df_snap.columns if '代码' in str(c)), None
+            )
+
+            if change_col and code_col:
+                print(f"   📊 深交所涨跌幅列: 「{change_col}」 代码列: 「{code_col}」")
+                for code in code_list:
+                    mask = df_snap[code_col].astype(str).str.strip() == str(code)
+                    row = df_snap[mask]
+                    if not row.empty:
+                        raw_chg = row.iloc[0][change_col]
+                        if pd.notna(raw_chg):
+                            change_map[str(code)] = round(float(raw_chg) / 100, 6)
+                            print(f"   📈 深交所 {code} 涨跌幅={float(raw_chg):.2f}%")
+                        else:
+                            print(f"   ⚠️ 深交所 {code} 涨跌幅为空")
+                break  # 成功跳出重试
+            else:
+                print(f"   ⚠️ 快照接口未找到升跌列，列名: {list(df_snap.columns)}")
+                break  # 列名不存在，重试也没用
+
+        except Exception as e:
+            if attempt < 3:
+                print(f"   ⚠️ 深交所涨跌幅请求失败(第{attempt}次): {e}")
+                time.sleep(3 * attempt)
+            else:
+                print(f"❌ 深交所涨跌幅获取失败(已重试3次): {e}")
 
     return results_map, market_map, nav_map, change_map
 
