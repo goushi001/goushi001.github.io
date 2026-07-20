@@ -45,18 +45,23 @@ jobs:
           JQ_PASS: ${{ secrets.JQ_PASS }}
           OUTPUT_DIR: 'data/billboard'
           OUTPUT_FORMAT: 'both'
-        run: python scripts/billboard_analysis.py
+        run: |
+          python -u scripts/billboard_analysis.py 2>&1 | tee data/billboard/run.log
+          echo "脚本退出码: $?"
 
       - name: 提交数据到仓库
         run: |
           git config user.name "billboard-bot"
           git config user.email "bot@github.com"
+          mkdir -p data/billboard
           git add data/billboard/
-          # 只有当有变化时才 commit（避免空提交）
+          # 只要有日志文件就提交（不管有没有数据）
           if git diff --quiet && git diff --staged --quiet; then
-            echo "📭 数据无变化，跳过提交"
+            echo "📭 无任何变化，跳过提交"
           else
             git commit -m "auto: 龙虎榜数据更新 $(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M')"
+            git config http.proxy http://127.0.0.1:10809
+            git config https.proxy http://127.0.0.1:10809
             git push
             echo "📤 数据已推送至仓库"
           fi

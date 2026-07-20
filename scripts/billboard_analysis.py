@@ -590,7 +590,9 @@ def main():
         print("❌ 错误：请在上方「填写区」填入聚宽账号密码，或设置环境变量 JQ_USER / JQ_PASS")
         sys.exit(1)
 
-    print(">>> 正在认证聚宽数据服务...")
+    auth_source = '填写区' if JQ_USER else '环境变量'
+    print(f">>> 正在认证聚宽数据服务...（来源: {auth_source}）")
+    print(f">>> 账号: {jq_user[:4]}****{jq_user[-4:] if len(jq_user) > 8 else ''}")
     auth(jq_user, jq_pass)
     print(">>> ✅ 认证成功！")
 
@@ -604,16 +606,27 @@ def main():
         data_days=255
     )
 
+    # 3. 生成日期戳
+    today_str = datetime.date.today().strftime('%Y%m%d')
+
     if df.empty:
-        print("⚠️ 没有数据输出，跳过保存。")
+        print("⚠️ 没有数据输出，保存空状态报告。")
+        # 写一个 status 文件说明情况
+        status = {
+            'date': today_str,
+            'status': 'no_data',
+            'message': '当日无龙虎榜数据（可能是周末/节假日/无上榜）',
+            'anchor_date': anchor_date_str
+        }
+        status_path = os.path.join(OUTPUT_DIR, f'billboard_status_{today_str}.json')
+        with open(status_path, 'w', encoding='utf-8') as f:
+            json.dump(status, f, ensure_ascii=False, indent=2)
+        print(f"📄 状态报告: {status_path}")
         return
 
-    # 3. 显示前几行
-    print("\n>>> 数据预览（前5行）：")
+    # 4. 显示前几行
+    print(f"\n>>> 数据预览（前{min(5, len(df))}行，共{len(df)}条）：")
     print(df.head().to_string())
-
-    # 4. 生成日期戳
-    today_str = datetime.date.today().strftime('%Y%m%d')
 
     # 5. 输出 JSON（适合博客前端读取）
     if OUTPUT_FORMAT in ('json', 'both'):
