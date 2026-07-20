@@ -39,6 +39,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: 诊断环境变量
+        env:
+          JQ_USER: ${{ secrets.JQ_USER }}
+          JQ_PASS: ${{ secrets.JQ_PASS }}
+        run: |
+          if [ -z "$JQ_USER" ]; then echo "❌ JQ_USER 为空"; else echo "✅ JQ_USER 已设置 (长度: ${#JQ_USER})"; fi
+          if [ -z "$JQ_PASS" ]; then echo "❌ JQ_PASS 为空"; else echo "✅ JQ_PASS 已设置 (长度: ${#JQ_PASS})"; fi
+
       - name: 运行龙虎榜分析
         env:
           JQ_USER: ${{ secrets.JQ_USER }}
@@ -46,8 +54,7 @@ jobs:
           OUTPUT_DIR: 'data/billboard'
           OUTPUT_FORMAT: 'both'
         run: |
-          python -u scripts/billboard_analysis.py 2>&1 | tee data/billboard/run.log
-          echo "脚本退出码: $?"
+          python -u scripts/billboard_analysis.py 2>&1 | tee data/billboard/run.log; echo "脚本退出码: ${PIPESTATUS[0]}"
 
       - name: 提交数据到仓库
         run: |
