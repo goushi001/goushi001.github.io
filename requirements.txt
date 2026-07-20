@@ -1,0 +1,9 @@
+# 聚宽数据 SDK（核心依赖）
+jqdatasdk
+
+# 数据处理
+pandas>=1.5
+numpy>=1.24
+
+# Excel 输出（如不需要可注释掉）
+openpyxl

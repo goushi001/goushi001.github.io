@@ -1,0 +1,62 @@
+name: 📊 龙虎榜数据自动化
+
+on:
+  schedule:
+    # 每个交易日收盘后运行（北京时间 20:00 = UTC 12:00）
+    # 可根据需要调整，以下三个时间点可选：
+    - cron: '0 12 * * 1-5'   # ① 收盘后 20:00（推荐）
+    # - cron: '0 9 * * 1-5'  # ② 盘中 17:00（收盘后缓冲区）
+    # - cron: '0 14 * * 1-5' # ③ 晚间 22:00
+  workflow_dispatch:          # 支持手动触发
+    inputs:
+      anchor_date:
+        description: '锚点日期（留空=最新交易日，格式 YYYY-MM-DD）'
+        required: false
+        default: ''
+      data_days:
+        description: '数据回溯天数'
+        required: false
+        default: '255'
+
+jobs:
+  run-analysis:
+    runs-on: ubuntu-latest
+    # 超时设置（这个脚本数据量大，给足时间）
+    timeout-minutes: 360
+
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@v4
+
+      - name: 设置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'  # 缓存 pip 依赖，加速后续运行
+
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: 运行龙虎榜分析
+        env:
+          JQ_USER: ${{ secrets.JQ_USER }}
+          JQ_PASS: ${{ secrets.JQ_PASS }}
+          OUTPUT_DIR: 'data/billboard'
+          OUTPUT_FORMAT: 'both'
+        run: python scripts/billboard_analysis.py
+
+      - name: 提交数据到仓库
+        run: |
+          git config user.name "billboard-bot"
+          git config user.email "bot@github.com"
+          git add data/billboard/
+          # 只有当有变化时才 commit（避免空提交）
+          if git diff --quiet && git diff --staged --quiet; then
+            echo "📭 数据无变化，跳过提交"
+          else
+            git commit -m "auto: 龙虎榜数据更新 $(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M')"
+            git push
+            echo "📤 数据已推送至仓库"
+          fi
