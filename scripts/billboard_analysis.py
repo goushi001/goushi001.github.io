@@ -1,6 +1,6 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
-🏆 全市场龙虎榜基础数据 + 技术面指标（GitHub Actions 自动化版）
+[WIN] 全市场龙虎榜基础数据 + 技术面指标（GitHub Actions 自动化版）
 ====================================================
 修改说明：
   - from jqdata import * → from jqdatasdk import * + auth()
@@ -21,7 +21,7 @@
 """
 
 # =============================================================================
-# 🔑 填写区 —— 在这里填入你的聚宽账号密码
+# [KEY] 填写区 —— 在这里填入你的聚宽账号密码
 # =============================================================================
 JQ_USER = ''      # ← 填你的聚宽账号（手机号或邮箱）
 JQ_PASS = ''      # ← 填你的聚宽密码
@@ -109,7 +109,7 @@ def calculate_continuous_boards(code, end_date_str):
 
 
 # =============================================================================
-# 📈 核心技术面量化计算引擎（ATH/ATL、1年/半年位置与最大回撤、均线与均量）
+# [UP] 核心技术面量化计算引擎（ATH/ATL、1年/半年位置与最大回撤、均线与均量）
 # =============================================================================
 
 def calculate_technical_features(code, target_date_str):
@@ -223,7 +223,7 @@ def calculate_technical_features(code, target_date_str):
 
 
 # =============================================================================
-# 🚀 核心二级火箭：龙虎榜股票全景数据诊断引擎（精简锚点版）
+# [LAUNCH] 核心二级火箭：龙虎榜股票全景数据诊断引擎（精简锚点版）
 # =============================================================================
 def run_billboard_stocks_diagnostic_engine(anchor_date_str=None, data_days=255):
     """
@@ -232,7 +232,7 @@ def run_billboard_stocks_diagnostic_engine(anchor_date_str=None, data_days=255):
     :param data_days: 🌟 数据回溯天数
     """
     print(f"\n{'='*77}")
-    print(f"🎬 正在初始化龙虎榜股票全景提取与多维分市场归类诊断引擎 (V15.2 锚点精简版)...")
+    print(f"[START] 正在初始化龙虎榜股票全景提取与多维分市场归类诊断引擎 (V15.2 锚点精简版)...")
     print(f"{'='*77}")
 
     # 1. 确定锚点基准日
@@ -247,30 +247,30 @@ def run_billboard_stocks_diagnostic_engine(anchor_date_str=None, data_days=255):
     bb_str = anchor_date.strftime('%Y-%m-%d')
     print(f">>> 控制状态 -> 锚点基准日 (提取当日龙虎榜): {bb_str} | 技术面数据回溯天数: {data_days} 个交易日")
 
-    # --- 🎯 2. 直接提取锚点当天的龙虎榜股票名单 ---
+    # --- [HIT] 2. 直接提取锚点当天的龙虎榜股票名单 ---
     print(f">>> 步骤一：正在检索锚点基准日 [{bb_str}] 当天的龙虎榜单...")
     try:
         raw_bb_df = get_billboard_list(stock_list=None, start_date=bb_str, end_date=bb_str)
         if raw_bb_df.empty:
-            print(f"⚠️ 提示：在锚点基准日 {bb_str} 期间没有任何股票上榜。")
+            print(f"[WARN] 提示：在锚点基准日 {bb_str} 期间没有任何股票上榜。")
             return pd.DataFrame()
 
         filtered_bb = raw_bb_df[raw_bb_df['code'].str.startswith(('00', '30', '60', '68', '43', '83', '87', '88'))].copy()
         target_codes = filtered_bb['code'].unique().tolist()
-        print(f">>> 🏆 成功在龙虎榜中捕获到 {len(target_codes)} 只异动明星股！")
+        print(f">>> [WIN] 成功在龙虎榜中捕获到 {len(target_codes)} 只异动明星股！")
     except Exception as e:
-        print(f"❌ 错误：提取龙虎榜股票失败: {e}")
+        print(f"[FAIL] 错误：提取龙虎榜股票失败: {e}")
         return pd.DataFrame()
 
     if not target_codes:
-        print("⚠️ 当日无龙虎榜数据，跳过运行。")
+        print("[WARN] 当日无龙虎榜数据，跳过运行。")
         return pd.DataFrame()
 
-    # --- 🎯 3. 计算提取个股基础数据的时间轴 ---
+    # --- [HIT] 3. 计算提取个股基础数据的时间轴 ---
     print(f">>> 步骤二：正在配置基础数据时间轴...")
     data_trade_days = get_trade_days(end_date=anchor_date, count=data_days)
     if len(data_trade_days) == 0:
-        print("❌ 错误：未获取到数据回溯交易日。")
+        print("[FAIL] 错误：未获取到数据回溯交易日。")
         return pd.DataFrame()
 
     start_date_str = data_trade_days[0].strftime('%Y-%m-%d')
@@ -293,7 +293,7 @@ def run_billboard_stocks_diagnostic_engine(anchor_date_str=None, data_days=255):
                 for s in stocks_in_ind:
                     sw3_mapping[s] = ind_name
     except Exception as e:
-        print(f"⚠️ 申万三级列表构建轻微扰动: {e}")
+        print(f"[WARN] 申万三级列表构建轻微扰动: {e}")
 
     # --- 5. 核心合成：成分股等权合成行业每日涨跌幅 ---
     print(">>> 正在通过【成分股等权合成法】计算相关三级行业每日真实涨跌幅矩阵...")
@@ -324,9 +324,9 @@ def run_billboard_stocks_diagnostic_engine(anchor_date_str=None, data_days=255):
                             sw3_daily_perf[date_str][ind_name] = ind_stock_pcts.mean()
                 print(">>> 🛠️ 行业涨跌幅矩阵内存合成完毕！")
             else:
-                print(">>> ⚠️ 行业数据为空，跳过行业涨跌幅计算")
+                print(">>> [WARN] 行业数据为空，跳过行业涨跌幅计算")
     except Exception as e:
-        print(f"⚠️ 行业涨跌幅合成异常: {e}")
+        print(f"[WARN] 行业涨跌幅合成异常: {e}")
 
     # --- 6. 智能多维度指数对齐准备 ---
     index_codes = ['000001.XSHG', '399001.XSHE', '399102.XSHE']
@@ -340,7 +340,7 @@ def run_billboard_stocks_diagnostic_engine(anchor_date_str=None, data_days=255):
             lambda x: x.set_index('code')['pct'].to_dict()
         ).to_dict()
     except Exception as e:
-        print(f"⚠️ 指数数据获取异常: {e}")
+        print(f"[WARN] 指数数据获取异常: {e}")
 
     all_results = []
     total_days = len(data_trade_days)
@@ -415,7 +415,7 @@ def run_billboard_stocks_diagnostic_engine(anchor_date_str=None, data_days=255):
             p_info = price_dict.get(code, {})
             f_info = fund_dict.get(code, {})
 
-            # 🔍 计算高级技术面数据
+            # [SEARCH] 计算高级技术面数据
             tech_info = calculate_technical_features(code, dt_str)
 
             # 智能判定偏离值锚定指数
@@ -462,7 +462,7 @@ def run_billboard_stocks_diagnostic_engine(anchor_date_str=None, data_days=255):
                 '收盘价': safe_val(close_price_val),
                 '涨跌幅': stock_pct,
 
-                # --- 🔍 高级技术面诊断指标 ---
+                # --- [SEARCH] 高级技术面诊断指标 ---
                 'ATH/ATL': tech_info['ATH/ATL'],
 
                 # 一年周期维度
@@ -504,7 +504,7 @@ def run_billboard_stocks_diagnostic_engine(anchor_date_str=None, data_days=255):
         all_results.extend(day_raw_records)
 
     if not all_results:
-        print("⚠️ 提示：所选数据时间段内未捕获到任何个股的有效行情数据。")
+        print("[WARN] 提示：所选数据时间段内未捕获到任何个股的有效行情数据。")
         return pd.DataFrame()
 
     df_final = pd.DataFrame(all_results)
@@ -526,7 +526,7 @@ def run_billboard_stocks_diagnostic_engine(anchor_date_str=None, data_days=255):
         pass
 
     # =============================================================================
-    # 🎯 核心升级：中国A股多层次资本市场分级排布与智能归类
+    # [HIT] 核心升级：中国A股多层次资本市场分级排布与智能归类
     # =============================================================================
     def get_market_rank(code):
         """根据股票代码前缀进行分市场等级计算"""
@@ -558,7 +558,7 @@ def run_billboard_stocks_diagnostic_engine(anchor_date_str=None, data_days=255):
     ]
     exact_col_order = [c for c in exact_col_order if c in df_final.columns]
 
-    # 🚀 排序优先级：日期倒序 -> 市场分级正序 -> 代码升序
+    # [LAUNCH] 排序优先级：日期倒序 -> 市场分级正序 -> 代码升序
     df_final = df_final.sort_values(
         by=['日期', '_market_rank', '股票代码'],
         ascending=[False, True, True]
@@ -574,7 +574,7 @@ def run_billboard_stocks_diagnostic_engine(anchor_date_str=None, data_days=255):
     if '当日成交量(手)' in df_final.columns:
         df_final['当日成交量(手)'] = df_final['当日成交量(手)'].astype(int)
 
-    print(f"\n>>> 🎯 提取完成！数据行数: {len(df_final)}")
+    print(f"\n>>> [HIT] 提取完成！数据行数: {len(df_final)}")
 
     return df_final
 
@@ -587,14 +587,14 @@ def main():
     jq_user = JQ_USER or os.environ.get('JQ_USER')
     jq_pass = JQ_PASS or os.environ.get('JQ_PASS')
     if not jq_user or not jq_pass:
-        print("❌ 错误：请在上方「填写区」填入聚宽账号密码，或设置环境变量 JQ_USER / JQ_PASS")
+        print("[FAIL] 错误：请在上方「填写区」填入聚宽账号密码，或设置环境变量 JQ_USER / JQ_PASS")
         sys.exit(1)
 
     auth_source = '填写区' if JQ_USER else '环境变量'
     print(f">>> 正在认证聚宽数据服务...（来源: {auth_source}）")
     print(f">>> 账号: {jq_user[:4]}****{jq_user[-4:] if len(jq_user) > 8 else ''}")
     auth(jq_user, jq_pass)
-    print(">>> ✅ 认证成功！")
+    print(">>> [OK] 认证成功！")
 
     # 1. 创建输出目录
     os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -610,7 +610,7 @@ def main():
     today_str = datetime.date.today().strftime('%Y%m%d')
 
     if df.empty:
-        print("⚠️ 没有数据输出，保存空状态报告。")
+        print("[WARN] 没有数据输出，保存空状态报告。")
         # 写一个 status 文件说明情况
         status = {
             'date': today_str,
@@ -621,7 +621,7 @@ def main():
         status_path = os.path.join(OUTPUT_DIR, f'billboard_status_{today_str}.json')
         with open(status_path, 'w', encoding='utf-8') as f:
             json.dump(status, f, ensure_ascii=False, indent=2)
-        print(f"📄 状态报告: {status_path}")
+        print(f"[FILE] 状态报告: {status_path}")
         return
 
     # 4. 显示前几行
@@ -636,25 +636,25 @@ def main():
         records = df_json.to_dict(orient='records')
         with open(json_path, 'w', encoding='utf-8') as f:
             json.dump(records, f, ensure_ascii=False, indent=2)
-        print(f"📄 JSON 输出: {json_path} ({len(records)} 条记录)")
+        print(f"[FILE] JSON 输出: {json_path} ({len(records)} 条记录)")
 
         # 同时输出 latest.json（始终指向最新，方便博客引用固定路径）
         latest_json = os.path.join(OUTPUT_DIR, 'billboard_data_latest.json')
         with open(latest_json, 'w', encoding='utf-8') as f:
             json.dump(records, f, ensure_ascii=False, indent=2)
-        print(f"📄 最新快照: {latest_json}")
+        print(f"[FILE] 最新快照: {latest_json}")
 
     # 6. 输出 CSV
     if OUTPUT_FORMAT in ('csv', 'both'):
         csv_path = os.path.join(OUTPUT_DIR, f'billboard_data_{today_str}.csv')
         df.to_csv(csv_path, index=False, encoding='utf-8-sig')
-        print(f"📄 CSV 输出: {csv_path}")
+        print(f"[FILE] CSV 输出: {csv_path}")
 
         latest_csv = os.path.join(OUTPUT_DIR, 'billboard_data_latest.csv')
         df.to_csv(latest_csv, index=False, encoding='utf-8-sig')
-        print(f"📄 最新快照: {latest_csv}")
+        print(f"[FILE] 最新快照: {latest_csv}")
 
-    print(f"\n✅ 全部完成！输出目录: {OUTPUT_DIR}")
+    print(f"\n[OK] 全部完成！输出目录: {OUTPUT_DIR}")
 
 
 if __name__ == '__main__':

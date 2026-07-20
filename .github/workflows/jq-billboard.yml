@@ -1,13 +1,10 @@
-name: 📊 龙虎榜数据自动化
+name: 龙虎榜数据自动化
 
 on:
   schedule:
     # 每个交易日收盘后运行（北京时间 20:00 = UTC 12:00）
-    # 可根据需要调整，以下三个时间点可选：
-    - cron: '0 12 * * 1-5'   # ① 收盘后 20:00（推荐）
-    # - cron: '0 9 * * 1-5'  # ② 盘中 17:00（收盘后缓冲区）
-    # - cron: '0 14 * * 1-5' # ③ 晚间 22:00
-  workflow_dispatch:          # 支持手动触发
+    - cron: '0 12 * * 1-5'
+  workflow_dispatch:
     inputs:
       anchor_date:
         description: '锚点日期（留空=最新交易日，格式 YYYY-MM-DD）'
@@ -21,7 +18,6 @@ on:
 jobs:
   run-analysis:
     runs-on: ubuntu-latest
-    # 超时设置（这个脚本数据量大，给足时间）
     timeout-minutes: 360
 
     steps:
@@ -32,7 +28,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-          cache: 'pip'  # 缓存 pip 依赖，加速后续运行
+          cache: 'pip'
 
       - name: 安装依赖
         run: |
@@ -44,17 +40,42 @@ jobs:
           JQ_USER: ${{ secrets.JQ_USER }}
           JQ_PASS: ${{ secrets.JQ_PASS }}
         run: |
-          if [ -z "$JQ_USER" ]; then echo "❌ JQ_USER 为空"; else echo "✅ JQ_USER 已设置 (长度: ${#JQ_USER})"; fi
-          if [ -z "$JQ_PASS" ]; then echo "❌ JQ_PASS 为空"; else echo "✅ JQ_PASS 已设置 (长度: ${#JQ_PASS})"; fi
+          echo "=== 环境变量诊断 ==="
+          if [ -z "$JQ_USER" ]; then echo "[ERR] JQ_USER 为空"; else echo "[OK] JQ_USER 已设置 (长度: ${#JQ_USER})"; fi
+          if [ -z "$JQ_PASS" ]; then echo "[ERR] JQ_PASS 为空"; else echo "[OK] JQ_PASS 已设置 (长度: ${#JQ_PASS})"; fi
+
+      - name: 测试 JQData 连通性
+        env:
+          JQ_USER: ${{ secrets.JQ_USER }}
+          JQ_PASS: ${{ secrets.JQ_PASS }}
+          PYTHONIOENCODING: utf-8
+        run: |
+          python -u -c "
+import os, sys
+from jqdatasdk import *
+try:
+    u = os.environ['JQ_USER']
+    p = os.environ['JQ_PASS']
+    auth(u, p)
+    print('[OK] auth success')
+    days = get_trade_days(end_date=None, count=5)
+    print(f'[OK] 交易日数据: {len(days)} 天, 最新: {days[-1]}')
+except Exception as e:
+    print(f'[ERR] {e}')
+    sys.exit(1)
+"
 
       - name: 运行龙虎榜分析
         env:
           JQ_USER: ${{ secrets.JQ_USER }}
           JQ_PASS: ${{ secrets.JQ_PASS }}
           OUTPUT_DIR: 'data/billboard'
-          OUTPUT_FORMAT: 'both'
+          OUTPUT_FORMAT: 'json'
+          PYTHONIOENCODING: utf-8
         run: |
-          python -u scripts/billboard_analysis.py 2>&1 | tee data/billboard/run.log; echo "脚本退出码: ${PIPESTATUS[0]}"
+          mkdir -p data/billboard
+          python -u scripts/billboard_analysis.py 2>&1 | tee data/billboard/run.log
+          echo "退出码: ${PIPESTATUS[0]}"
 
       - name: 提交数据到仓库
         run: |
@@ -62,13 +83,12 @@ jobs:
           git config user.email "bot@github.com"
           mkdir -p data/billboard
           git add data/billboard/
-          # 只要有日志文件就提交（不管有没有数据）
           if git diff --quiet && git diff --staged --quiet; then
-            echo "📭 无任何变化，跳过提交"
+            echo "[INFO] 无任何变化，跳过提交"
           else
             git commit -m "auto: 龙虎榜数据更新 $(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M')"
             git config http.proxy http://127.0.0.1:10809
             git config https.proxy http://127.0.0.1:10809
             git push
-            echo "📤 数据已推送至仓库"
+            echo "[OK] 数据已推送至仓库"
           fi
