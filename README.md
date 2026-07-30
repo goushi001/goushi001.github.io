@@ -14,7 +14,7 @@ python3 -m http.server 3000
 
 所有内容通过 `js/main.js` 中的数组管理：
 
-### 📄 资料
+### 📄 资料  
 在 `MATERIALS` 数组里添加条目：
 ```js
 { icon: "📘", title: "标题", desc: "描述文字", tags: ["标签1", "标签2"], date: "2026-06-08" }
